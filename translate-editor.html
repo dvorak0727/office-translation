@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>翻譯上稿工具</title>
+<style>
+  body { font-family: "Microsoft JhengHei", Arial, sans-serif; background:#f0f4f8; margin:0; padding:24px; color:#222; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .hint { color:#666; margin-bottom: 20px; font-size:0.95rem; }
+  .card { background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:24px; margin-bottom:18px; }
+  label { display:block; font-weight:bold; margin-bottom:6px; margin-top:16px; }
+  label:first-child { margin-top:0; }
+  input[type=text], input[type=date], select {
+    width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:1rem; box-sizing:border-box;
+  }
+  textarea {
+    width:100%; min-height:140px; padding:10px; border:1px solid #cbd5e1; border-radius:8px;
+    font-size:1rem; box-sizing:border-box; font-family:inherit; resize:vertical;
+  }
+  .row3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:14px; }
+  .step { background:#e0f2fe; border-left:4px solid #3498db; padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:0.92rem; color:#0369a1; }
+  .step b { color:#1d4ed8; }
+  button {
+    background:#16a34a; color:#fff; border:none; padding:14px 28px; border-radius:8px;
+    font-size:1.05rem; font-weight:bold; cursor:pointer; margin-top:20px;
+  }
+  button:hover { background:#15803d; }
+  .copybox { background:#1e293b; color:#e2e8f0; padding:12px; border-radius:8px; font-size:0.85rem; margin-top:10px; word-break:break-all; }
+  .ok { color:#15803d; font-weight:bold; margin-top:10px; display:none; }
+  .upload-row { display:flex; align-items:center; gap:10px; margin-top:6px; }
+  .upload-row input[type=file] { font-size:0.9rem; }
+  .upload-status { font-size:0.85rem; color:#16a34a; font-weight:bold; }
+  .upload-hint { font-size:0.78rem; color:#888; margin:6px 0 10px; }
+  .label-row { display:flex; align-items:center; gap:10px; margin-top:16px; margin-bottom:6px; flex-wrap:wrap; }
+  .mini-btn {
+    background:#3498db; color:#fff; border:none; padding:6px 14px; border-radius:16px;
+    font-size:0.82rem; font-weight:bold; cursor:pointer;
+  }
+  .mini-btn:hover { background:#2980b9; }
+  .mini-btn:disabled { background:#94a3b8; cursor:wait; }
+  .mini-status { font-size:0.8rem; color:#16a34a; font-weight:bold; }
+  .disclaimer { font-size:0.78rem; color:#b45309; margin-top:2px; }
+</style>
+</head>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<body>
+<div class="wrap">
+  <h1>📄 翻譯上稿工具</h1>
+  <div class="hint">填好下面欄位 → 按「產生網頁檔」→ 檔案會自動下載到指定資料夾 → 最後雙擊「上傳到GitHub.bat」即可。</div>
+
+  <div class="step">
+    <b>使用步驟：</b><br>
+    ① 貼上處室發來的中文原文（或上傳檔案自動帶入）　② 按「🌐 一鍵翻譯」自動翻成英文/越南文，<b>或</b>自己複製貼到 ChatGPT/Gemini 網頁翻譯　③ <b>務必核對翻譯內容是否正確</b>　④ 按下方按鈕產生網頁檔
+    <div class="disclaimer">⚠ 一鍵翻譯是用免費機器翻譯，正式公文用語、專有名詞可能不夠精準，重要文件建議翻完後再用 ChatGPT/Gemini 核對潤飾一次。</div>
+  </div>
+
+  <div class="card">
+    <div class="row3">
+      <div>
+        <label>發文處室</label>
+        <select id="office">
+          <option value="教務處">教務處</option>
+          <option value="學務處" selected>學務處</option>
+          <option value="總務處">總務處</option>
+          <option value="輔導室">輔導室</option>
+          <option value="圖資中心">圖資中心</option>
+          <option value="幼兒園">幼兒園</option>
+          <option value="人事室">人事室</option>
+          <option value="會計室">會計室</option>
+          <option value="__other__">其他（自行輸入）</option>
+        </select>
+        <input type="text" id="officeOther" placeholder="請輸入處室名稱" style="display:none; margin-top:8px;">
+      </div>
+      <div>
+        <label>文件標題</label>
+        <input type="text" id="title" placeholder="例如：112學年度期末考通知">
+      </div>
+      <div>
+        <label>日期</label>
+        <input type="date" id="docdate">
+      </div>
+    </div>
+
+    <label>中文原文</label>
+    <div class="upload-row">
+      <input type="file" id="fileUpload" accept=".docx,.pdf,.txt">
+      <span id="uploadStatus" class="upload-status"></span>
+    </div>
+    <div class="upload-hint">支援 Word(.docx)、PDF、純文字(.txt)檔案，上傳後會自動把文字填到下面欄位（圖片檔請直接複製文字，或先用 ChatGPT/Gemini 辨識再貼上）</div>
+    <textarea id="zh" placeholder="貼上處室發來的中文公文內容，或用上方「選擇檔案」自動帶入..."></textarea>
+
+    <div class="label-row">
+      <label style="margin:0;">English Translation（英文翻譯）</label>
+      <button type="button" class="mini-btn" onclick="autoTranslate('en')">🌐 一鍵翻譯成英文</button>
+      <span id="statusEn" class="mini-status"></span>
+    </div>
+    <textarea id="en" placeholder="Paste English translation here，或按上方「一鍵翻譯」自動帶入（建議再人工核對一次）..."></textarea>
+
+    <div class="label-row">
+      <label style="margin:0;">Bản dịch tiếng Việt（越南文翻譯）</label>
+      <button type="button" class="mini-btn" onclick="autoTranslate('vi')">🌐 一鍵翻譯成越文</button>
+      <span id="statusVi" class="mini-status"></span>
+    </div>
+    <textarea id="vi" placeholder="Dán bản dịch tiếng Việt vào đây，或按上方「一鍵翻譯」自動帶入（建議再人工核對一次）..."></textarea>
+
+    <button onclick="openPreview()">👁️ 預覽網頁</button>
+    <div class="ok" id="okmsg">✔ 已產生！請確認檔案下載到「docs」資料夾，接著雙擊「上傳到GitHub.bat」。</div>
+  </div>
+
+  <div class="card" id="nextStepCard" style="display:none; background:#dcfce7; border:2px solid #16a34a;">
+    <h3 style="color:#15803d; margin-top:0;">🎉 網頁檔已下載完成，接下來：</h3>
+    <p style="margin-bottom:10px; font-size:1.05rem;">
+      請到你的 <b>電腦桌面</b>，找到「<b>① 上傳翻譯到網站</b>」這個圖示，<b>直接雙擊它</b>就能上傳到網站了。
+    </p>
+    <p style="font-size:0.85rem; color:#666;">
+      ⚠ 找不到桌面圖示？表示還沒建立過。第一次使用請雙擊資料夾裡的「<b>建立桌面捷徑.bat</b>」，之後桌面就會永遠有這兩個圖示可以用，不用再開瀏覽器找資料夾。
+    </p>
+  </div>
+</div>
+
+<!-- 預覽視窗 -->
+<div id="previewOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:999; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:12px; width:92%; max-width:900px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">
+    <div style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+      <b style="font-size:1.1rem;">👁️ 預覽（送出前請確認內容無誤）</b>
+      <button onclick="closePreview()" style="background:#94a3b8; padding:6px 14px;">✕ 關閉</button>
+    </div>
+    <iframe id="previewFrame" style="flex:1; border:none; width:100%; min-height:60vh;"></iframe>
+    <div style="padding:16px 20px; border-top:1px solid #e2e8f0; display:flex; gap:12px; justify-content:flex-end;">
+      <button onclick="closePreview()" style="background:#94a3b8;">← 返回修改</button>
+      <button onclick="confirmAndGenerate()" style="background:#16a34a;">✅ 確認無誤，產生並下載</button>
+    </div>
+  </div>
+</div>
+
+<script>
+if (window['pdfjs-dist/build/pdf']) {
+  window.pdfjsLib = window['pdfjs-dist/build/pdf'];
+}
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+}
+
+function pad(n){ return n.toString().padStart(2,'0'); }
+
+document.getElementById('office').addEventListener('change', function(){
+  const otherInput = document.getElementById('officeOther');
+  if (this.value === '__other__') {
+    otherInput.style.display = 'block';
+    otherInput.focus();
+  } else {
+    otherInput.style.display = 'none';
+  }
+});
+
+function splitIntoChunks(text, maxLen){
+  const paras = text.split(/\n+/);
+  const chunks = [];
+  let cur = "";
+  for (const p of paras){
+    if ((cur + "\n" + p).length > maxLen){
+      if (cur) chunks.push(cur);
+      cur = p.length > maxLen ? p.slice(0, maxLen) : p;
+    } else {
+      cur = cur ? cur + "\n" + p : p;
+    }
+  }
+  if (cur) chunks.push(cur);
+  return chunks.length ? chunks : [text];
+}
+
+async function translateChunk(text, tl){
+  const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=zh-TW&tl=" + tl + "&dt=t&q=" + encodeURIComponent(text);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  return data[0].map(seg => seg[0]).join('');
+}
+
+async function autoTranslate(target){
+  const zh = document.getElementById('zh').value.trim();
+  const btn = event.target;
+  const statusEl = document.getElementById(target === 'en' ? 'statusEn' : 'statusVi');
+  const tl = target === 'en' ? 'en' : 'vi';
+
+  if (!zh){ alert("請先填寫「中文原文」再翻譯"); return; }
+
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = "翻譯中...";
+  statusEl.style.color = '#0369a1';
+  statusEl.textContent = '請稍候...';
+
+  try {
+    const chunks = splitIntoChunks(zh, 1800);
+    let result = "";
+    for (const c of chunks){
+      result += await translateChunk(c, tl);
+      result += "\n";
+    }
+    document.getElementById(target).value = result.trim();
+    statusEl.style.color = '#16a34a';
+    statusEl.textContent = '✔ 已自動翻譯，請務必人工核對！';
+  } catch (err) {
+    statusEl.style.color = '#b91c1c';
+    statusEl.textContent = '⚠ 自動翻譯失敗，請改用 ChatGPT/Gemini 手動翻譯';
+    console.error(err);
+    const openManual = confirm("一鍵翻譯失敗（可能是網路問題）。要不要幫你打開 Google 翻譯網頁，把中文原文帶過去？");
+    if (openManual){
+      const gtUrl = "https://translate.google.com/?sl=zh-TW&tl=" + tl + "&text=" + encodeURIComponent(zh) + "&op=translate";
+      window.open(gtUrl, "_blank");
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+document.getElementById('fileUpload').addEventListener('change', async function(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('uploadStatus');
+  status.style.color = '#0369a1';
+  status.textContent = '讀取中...';
+
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  try {
+    if (ext === 'txt') {
+      const text = await file.text();
+      if (!text.trim()) {
+        status.style.color = '#b91c1c';
+        status.textContent = '⚠ 這個檔案是空的';
+      } else {
+        document.getElementById('zh').value = text;
+        status.style.color = '#16a34a';
+        status.textContent = '✔ 已帶入：' + file.name;
+      }
+
+    } else if (ext === 'docx') {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      if (!result.value.trim()) {
+        status.style.color = '#b91c1c';
+        status.textContent = '⚠ 抓不到文字，這份 Word 檔可能是掃描圖片，請改用 ChatGPT/Gemini 辨識後手動貼上';
+      } else {
+        document.getElementById('zh').value = result.value;
+        status.style.color = '#16a34a';
+        status.textContent = '✔ 已帶入：' + file.name;
+      }
+
+    } else if (ext === 'pdf') {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        fullText += content.items.map(it => it.str).join(' ') + '\n\n';
+      }
+      fullText = fullText.trim();
+      if (!fullText) {
+        status.style.color = '#b91c1c';
+        status.textContent = '⚠ 抓不到文字，這份 PDF 是掃描/圖片檔（沒有文字層）。請改用 ChatGPT/Gemini 上傳圖片辨識文字，再貼到下面欄位';
+      } else {
+        document.getElementById('zh').value = fullText;
+        status.style.color = '#16a34a';
+        status.textContent = '✔ 已帶入：' + file.name;
+      }
+
+    } else {
+      status.style.color = '#b91c1c';
+      status.textContent = '不支援這種檔案格式，請改用 .docx / .pdf / .txt';
+    }
+  } catch (err) {
+    status.style.color = '#b91c1c';
+    status.textContent = '讀取失敗，請改用複製貼上方式（' + err.message + '）';
+  }
+});
+
+let pendingFile = null; // { filename, html }
+
+function buildDoc(){
+  let office = document.getElementById('office').value;
+  if (office === '__other__') {
+    office = document.getElementById('officeOther').value.trim() || "未分類";
+  }
+  const title = document.getElementById('title').value.trim() || "未命名文件";
+  const docdate = document.getElementById('docdate').value || new Date().toISOString().slice(0,10);
+  const zh = document.getElementById('zh').value.trim();
+  const en = document.getElementById('en').value.trim();
+  const vi = document.getElementById('vi').value.trim();
+
+  if(!zh){ alert("請至少貼上中文原文"); return null; }
+
+  const safeTitle = title.replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g,"_").slice(0,40);
+  const filename = `${docdate}_${safeTitle}.html`;
+
+  const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="doc-title" content="${esc(title)}">
+<meta name="doc-office" content="${esc(office)}">
+<meta name="doc-date" content="${docdate}">
+<title>${esc(title)}</title>
+<style>
+  body { font-family: "Microsoft JhengHei", Arial, sans-serif; background:#f0f4f8; margin:0; padding:24px; }
+  .wrap { max-width: 900px; margin:0 auto; }
+  .top { background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:24px; margin-bottom:18px; }
+  .top h1 { font-size:1.4rem; margin:0 0 6px; color:#1e293b; }
+  .meta { color:#666; font-size:0.9rem; }
+  .tabs { display:flex; gap:8px; margin:18px 0; flex-wrap:wrap; }
+  .tab-btn { padding:8px 18px; border-radius:20px; border:1px solid #cbd5e1; background:#f1f5f9; cursor:pointer; font-weight:bold; }
+  .tab-btn.active { background:#3498db; color:#fff; border-color:#3498db; }
+  .panel { background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:24px; white-space:pre-wrap; line-height:1.8; display:none; }
+  .panel.active { display:block; }
+  a.back { display:inline-block; margin-bottom:14px; color:#3498db; text-decoration:none; font-weight:bold; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">← 回文件清單</a>
+  <div class="top">
+    <h1>${esc(title)}</h1>
+    <div class="meta">發文處室：${esc(office)}　｜　日期：${docdate}</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab(0,this)">中文原文</button>
+    ${en ? `<button class="tab-btn" onclick="showTab(1,this)">English</button>` : ""}
+    ${vi ? `<button class="tab-btn" onclick="showTab(2,this)">Tiếng Việt</button>` : ""}
+  </div>
+
+  <div class="panel active" data-i="0">${esc(zh)}</div>
+  ${en ? `<div class="panel" data-i="1">${esc(en)}</div>` : ""}
+  ${vi ? `<div class="panel" data-i="2">${esc(vi)}</div>` : ""}
+</div>
+<script>
+function showTab(i, btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('.panel[data-i="'+i+'"]').classList.add('active');
+  btn.classList.add('active');
+}
+<\/script>
+</body>
+</html>`;
+
+  return { filename, html };
+}
+
+function openPreview(){
+  const doc = buildDoc();
+  if (!doc) return;
+  pendingFile = doc;
+  document.getElementById('previewFrame').srcdoc = doc.html;
+  document.getElementById('previewOverlay').style.display = 'flex';
+}
+
+function closePreview(){
+  document.getElementById('previewOverlay').style.display = 'none';
+}
+
+function confirmAndGenerate(){
+  if (!pendingFile) return;
+  const blob = new Blob([pendingFile.html], {type: "text/html"});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = pendingFile.filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  closePreview();
+  document.getElementById('okmsg').style.display = 'block';
+  document.getElementById('nextStepCard').style.display = 'block';
+  document.getElementById('nextStepCard').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function openFolder(){
+  // 瀏覽器基於安全限制無法直接執行 .bat，這裡改為開啟本機資料夾，
+  // 讓使用者自己雙擊「上傳到GitHub.bat」。
+  window.open('./', '_blank');
+}
+</script>
+</body>
+</html>

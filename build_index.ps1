@@ -1,0 +1,150 @@
+﻿# build_index.ps1
+# 掃描 docs 資料夾裡的所有翻譯網頁，自動重新產生 index.html 清單頁
+
+$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$docsDir = Join-Path $root "docs"
+$indexPath = Join-Path $root "index.html"
+
+if (-not (Test-Path $docsDir)) {
+    New-Item -ItemType Directory -Path $docsDir -Force | Out-Null
+    Write-Host "docs 資料夾不存在，已自動建立。"
+}
+
+$files = Get-ChildItem -Path $docsDir -Filter "*.html" | Sort-Object LastWriteTime -Descending
+
+$cards = ""
+foreach ($f in $files) {
+    $content = Get-Content -Raw -Encoding UTF8 $f.FullName
+
+    $title = "未命名文件"
+    $office = "未分類"
+    $date = ""
+
+    if ($content -match '<meta name="doc-title" content="([^"]*)"') { $title = $matches[1] }
+    if ($content -match '<meta name="doc-office" content="([^"]*)"') { $office = $matches[1] }
+    if ($content -match '<meta name="doc-date" content="([^"]*)"') { $date = $matches[1] }
+
+    $link = "docs/" + $f.Name
+
+    $cards += @"
+    <div class="doc-card">
+      <span class="office-badge">$office</span>
+      <h3><a href="$link">$title</a></h3>
+      <div class="doc-date">📅 $date</div>
+    </div>
+"@
+}
+
+if ($files.Count -eq 0) {
+    $cards = '<p style="color:#888;">目前還沒有任何翻譯文件，請使用 translate-editor.html 建立第一份文件。</p>'
+}
+
+$template = @"
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>國教中心 公文翻譯總覽</title>
+<style>
+  body { font-family: "Microsoft JhengHei", Arial, sans-serif; background:#f0f4f8; margin:0; padding:24px; color:#222; }
+  .wrap { max-width: 960px; margin:0 auto; }
+  h1 { font-size:1.6rem; margin-bottom:4px; }
+  .sub { color:#666; margin-bottom:24px; }
+
+  .setup-card { background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:24px; margin-bottom:28px; }
+  .setup-card h2 { font-size:1.15rem; margin:0 0 4px; color:#1e293b; }
+  .setup-card .setup-sub { color:#666; font-size:0.9rem; margin-bottom:18px; }
+  .zip-btn { display:inline-block; background:#16a34a; color:#fff; text-decoration:none; font-weight:bold;
+             padding:10px 18px; border-radius:8px; font-size:0.95rem; float:right; margin-top:-46px; }
+  .zip-btn:hover { background:#15803d; }
+  .step-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:14px; margin-top:10px; }
+  .step-box { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px; text-align:center; }
+  .step-box .num { display:inline-block; width:26px; height:26px; line-height:26px; border-radius:50%;
+                    background:#3498db; color:#fff; font-weight:bold; font-size:0.85rem; margin-bottom:8px; }
+  .step-box .step-title { font-weight:bold; font-size:0.9rem; margin-bottom:4px; color:#1e293b; }
+  .step-box .step-desc { font-size:0.78rem; color:#777; line-height:1.4; }
+  .toggle-guide { text-align:center; margin-top:14px; }
+  .toggle-guide summary { cursor:pointer; color:#3498db; font-weight:bold; font-size:0.9rem; }
+
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:16px; }
+  .doc-card { background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:18px; }
+  .doc-card h3 { margin:8px 0; font-size:1.05rem; }
+  .doc-card a { color:#1e293b; text-decoration:none; }
+  .doc-card a:hover { color:#3498db; }
+  .office-badge { display:inline-block; background:#e0f2fe; color:#0369a1; font-size:0.8rem; padding:3px 10px; border-radius:12px; font-weight:bold; }
+  .doc-date { color:#888; font-size:0.85rem; margin-top:6px; }
+  .updated { text-align:right; color:#999; font-size:0.8rem; margin-top:30px; }
+
+  @media (max-width: 600px){ .zip-btn { float:none; display:block; margin:10px 0 0; text-align:center; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🌐 國教中心 公文翻譯總覽</h1>
+  <div class="sub">給外師（English / Tiếng Việt）查閱各處室公文翻譯</div>
+
+  <div class="setup-card">
+    <h2>🛠️ 系統建置與維護指南</h2>
+    <div class="setup-sub">第一次使用，或要在新電腦上設定，照著下面 7 個步驟做即可，不需要工程師協助。</div>
+    <a class="zip-btn" href="https://github.com/dvorak0727/office-translation/archive/refs/heads/main.zip" target="_blank">⬇️ 下載完整工具包 ZIP</a>
+
+    <div class="step-grid">
+      <div class="step-box" style="border-color:#fbbf24; background:#fffbeb;"><div class="num" style="background:#f59e0b;">0</div><div class="step-title">安裝 Git</div><div class="step-desc">電腦第一次用需先裝好 Git<br><a href="https://git-scm.com/download/win" target="_blank" style="color:#b45309; font-weight:bold;">👉 點我下載 Git</a></div></div>
+      <div class="step-box"><div class="num">1</div><div class="step-title">建置 GitHub</div><div class="step-desc">申請帳號、建立 repo、開啟 GitHub Pages（已完成 ✅）</div></div>
+      <div class="step-box"><div class="num">2</div><div class="step-title">AGENTS.md 設定</div><div class="step-desc">AGENTS.md / CLAUDE.md / GEMINI.md 說明整套系統怎麼運作</div></div>
+      <div class="step-box"><div class="num">3</div><div class="step-title">製作網頁</div><div class="step-desc">雙擊 translate-editor.html，填表單建立文件</div></div>
+      <div class="step-box"><div class="num">4</div><div class="step-title">貼上原文</div><div class="step-desc">貼上處室發來的中文公文內容</div></div>
+      <div class="step-box"><div class="num">5</div><div class="step-title">翻譯英/越文</div><div class="step-desc">複製到 ChatGPT / Gemini 網頁翻譯，貼回表單</div></div>
+      <div class="step-box"><div class="num">6</div><div class="step-title">核對確認</div><div class="step-desc">檢查翻譯內容正確後，按「產生網頁檔」</div></div>
+      <div class="step-box"><div class="num">7</div><div class="step-title">一鍵上傳</div><div class="step-desc">雙擊「上傳到GitHub.bat」，等跑完就上線了</div></div>
+    </div>
+
+    <details class="toggle-guide">
+      <summary>📖 展開完整文字版設定教學</summary>
+      <div style="text-align:left; margin-top:14px; font-size:0.88rem; line-height:1.8; color:#444;">
+        <b>Step 0｜安裝 Git（只需做一次）</b><br>
+        1. 前往 <a href="https://git-scm.com/download/win" target="_blank">git-scm.com/download/win</a> 下載安裝檔<br>
+        2. 打開安裝程式，全程按「Next」保持預設值即可，最後按「Install」<br>
+        3. 裝好後不用特別打開它，之後雙擊 bat 檔案時會自動呼叫<br><br>
+
+        <b>Step 1｜建置 GitHub（只需做一次）</b><br>
+        1. 前往 github.com 申請帳號<br>
+        2. 建立 repo，取名 <code>office-translation</code><br>
+        3. Repo → Settings → Pages → Source 選「Deploy from a branch」→ Branch 選 main / (root) → Save<br>
+        4. 網站網址會是 https://dvorak0727.github.io/office-translation/<br><br>
+
+        <b>Step 2｜下載工具包到電腦</b><br>
+        點上方「⬇️ 下載完整工具包 ZIP」按鈕，解壓縮後會看到：
+        translate-editor.html、build_index.ps1、上傳到GitHub.bat、第一次設定.bat、建立桌面捷徑.bat、AGENTS.md 等檔案。
+        或雙擊「第一次設定.bat」用 git clone 下載（電腦需先安裝 Git）。<br><br>
+
+        <b>Step 2.5｜建立桌面捷徑（強烈建議，只需做一次）</b><br>
+        雙擊「<b>建立桌面捷徑.bat</b>」，會自動在桌面產生兩個圖示：
+        「① 翻譯上稿工具」與「① 上傳翻譯到網站」。
+        <b>⚠ 注意：瀏覽器基於安全機制，無法直接執行電腦裡的 .bat 程式</b>
+        （例如用瀏覽器打開資料夾點 .bat 只會顯示程式碼文字，不會真的執行）。
+        建立好桌面捷徑後，之後永遠只要在「桌面」雙擊圖示即可，不用再透過瀏覽器找資料夾。<br><br>
+
+        <b>Step 3～6｜日常上稿流程</b><br>
+        雙擊 translate-editor.html → 填「發文處室／標題／日期」→ 貼中文原文 →
+        到 ChatGPT 或 Gemini 網頁請它翻譯成英文/越南文 → 貼回表單對應欄位 →
+        核對翻譯內容無誤 → 按「產生網頁檔」（會自動下載到 docs 資料夾）。<br><br>
+
+        <b>Step 7｜上傳</b><br>
+        雙擊「上傳到GitHub.bat」，跑完後網站會自動更新，外師打開網址就能看到最新文件。
+      </div>
+    </details>
+  </div>
+
+  <div class="grid">
+$cards
+  </div>
+  <div class="updated">最後更新：$(Get-Date -Format "yyyy-MM-dd HH:mm")</div>
+</div>
+</body>
+</html>
+"@
+
+Set-Content -Path $indexPath -Value $template -Encoding UTF8
+Write-Host "index.html 已更新，共 $($files.Count) 份文件。"
